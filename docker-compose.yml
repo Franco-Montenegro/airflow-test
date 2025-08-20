@@ -1,0 +1,38 @@
+services:
+  airflow:
+    image: apache/airflow:2.9.2-python3.11
+    container_name: airflow-mini
+    restart: unless-stopped
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__CORE__EXECUTOR: "SequentialExecutor"
+      AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8080"
+      AIRFLOW__WEBSERVER__WEB_SERVER_HOST: "0.0.0.0"
+      AIRFLOW_UID: "50000"               # permisos consistentes en WSL/Win
+      TZ: "America/Santiago"
+      # Credenciales que usará el bootstrap para crear/actualizar el admin:
+      AIRFLOW_USER: ${AIRFLOW_USER:-admin}
+      AIRFLOW_PASS: ${AIRFLOW_PASS:-admin}
+    env_file:
+      - .env.docker                       # crea uno a partir del .example
+    ports:
+      - "8085:8080"                       # evita choques con otros servicios
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./airflow/requirements.txt:/opt/airflow/requirements.txt
+      - ./src:/opt/airflow/repo/src
+      - ./data:/opt/airflow/repo/data
+      - ./.artifacts:/opt/airflow/repo/.artifacts
+      - airflow_logs:/opt/airflow/logs    # named volume para evitar permisos
+      - ./scripts/airflow-bootstrap.sh:/opt/airflow/scripts/bootstrap.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    command: >
+      bash -lc "/opt/airflow/scripts/bootstrap.sh"
+
+volumes:
+  airflow_logs: {}
